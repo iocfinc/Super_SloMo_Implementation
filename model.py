@@ -209,18 +209,143 @@ class UNET(nn.Module):
 # defined in the Super SlowMo paper that helped them achieve their results. This would include getting the warp coefficients.
 # TODO: Complete the backwarp class, getFlowCoeff function and getWarpCoeff function
 class backwarp(nn.Module):
+    """
+    Returns the output tensor after passing input `x` to the UNET.
+    We are now going to link up all the layers we have initialized so they form up the UNET architecture.
+    Parameters
+    ----------------------------------------
+    x: tensor
+        The input to the entire UNET. So this would be the frames
+    Returns
+    ----------------------------------------
+    tensor
+        The output of the UNET. This should be the interpolated frame.
+    """
 
-    def __init__(self):
-        return super().__init__()
+    def __init__(self, W, H, device):
+        """
+        Parameters
+        ----------------------------------------
+        W: int
+            input image width
+        H: int
+            input image height
+        device: device
+            computation device, either (cpu/cuda)
+        """
+        super(backwarp, self).__init__()
+        gridx, gridy = np.meshgrid(np.arange(W), np.arange(H))
+        self.W = W
+        self.H = H
+        self.gridx = torch.Tensor(gridx, requires_grad = False, device = device)
+        self.gridy = torch.Tensor(gridy, requires_grad = False, device = device)
     
-    def forward(self, *input):
-        return super().forward(*input)
+    def forward(self, img, flow):
+        """
+        Passes `img` input and `flow` input to the network for backwarping block
+        Basically, moving back the frames with accounting of the optical flow that happened between I0 and I1
+        From the paper:
+        I0 = backwarp(I1, F_0_1)
+
+        Parameters
+        ----------------------------------------
+        img: tensor
+            input image (I1)
+        flow: tensor
+            optical flow from I0 and I1: F_0_1
+        device: device
+            computation device, either (cpu/cuda)
+        Returns
+        ----------------------------------------
+        tensor
+            frame (I0)
+        """
+        # The following cell would be used to get the horizontal and vertical flows
+
+        u = flow[:, 0, :, :]
+        v = flow[:, 1, :, :]
+        x = self.gridx.unsqueeze(0).expand_as(u).float()+u
+        y = self.gridy.unsqueeze(0).expand_as(v).float()+v
+
+        # Flow range from -1 to 1 this is for compliance with `grid_sample` method of PyTorch
+        x = 2*(x/self.W - 0.5)
+        y = 2*(x/self.H - 0.5)
+
+        # X and Y stacked
+        grid = torch.stack((x,y), dim = 3)
+
+        # Producing the sample pixels using bilinear interpolation, this is handled by grid_sample method
+        imgOut = torch.nn.functional.grid_sample(img, grid)
+        return imgOut
     
 # NOTE: This is the t values for the intermediate frames. There would be 7 frames between t=0 --> t=1
 # We are using linspace to genrate the values instead of manually defining them. 1/8 = 0.125
 t = np.linspace(0.125, 0.875, 7)
 
 def getFlowCoeff (indices, device):
-    pass
+    """
+    We are getting the flow coefficients used for calculating the intermidiate(in between) optical flow
+    from the flows between I0 and I1: F_0_1 and F_1_0.
+
+    This is for the interpolation of arbitrary-time flow (eq. 2 and 3 of the paper)
+    
+    F_t_0 = C00 x F_0_1 + C01 x F_1_0
+    F_t_1 = C10 x F_0_1 + C11 x F_1_0
+
+    where:
+    C00 = -(1-t) x t
+    C01 = txt
+    C10 = (1-t) x (1-t)
+    C11 = -t x (1-t)
+
+    Parameters
+    ----------------------------------------
+    indices: tensor
+        The corresponding intermediate frame position of all samples in the batch
+    device: device
+        Where our operation would be running
+
+    Returns
+    ----------------------------------------
+    tensor
+        Coefficients of C00, C01, C10, C11
+    """
+    # detaching the indices tensor and making it a numpy array
+    ind = indices.detach().numpy()
+    C11 = C00 = -(1 - (t[ind]))*(t[ind])
+    C01 = (t[ind])*(t[ind])
+    C10 = (1 - (t[ind]))*(1-(t[ind]))
+    return torch.Tensor(C00)[None, None, None, :].permute(3,0,1,2).to(device),torch.Tensor(C01)[None, None, None, :].permute(3,0,1,2).to(device),torch.Tensor(C10)[None, None, None, :].permute(3,0,1,2).to(device),torch.Tensor(C11)[None, None, None, :].permute(3,0,1,2).to(device),
+
 def getWarpCoeff(indices, device):
-    pass
+    """
+    This is where we get the coefficients for our warping function. This will allow us to compute
+    for the intermediate frames between F_t_0 and F_t_1. On the paper these are the coefficients in
+    equation 1.
+
+    It_gen = (C0 x V_t_0 x g_I_0_F_t_0 + C1 x V_t_1 x g_I_1_F_t_1)/ (C0 x V_t_0 + C1 x V_t_1)
+
+    where:
+    C0 = 1-t
+    C1 = t
+
+    Parameters
+    ----------------------------------------
+    indices: tensor
+        Indices that corresponds to the intermediate frame positions of all samples in the batch (arbitrary time)
+    device: device
+        Where our operation would be running
+
+    Returns
+    ----------------------------------------
+    tensor:
+        Coefficients for C0 and C1
+    """
+    # detaching the indices tensor and making it a numpy array
+    ind = indices.detach().numpy()
+    C0 = 1 - t[ind]
+    C1 = t[ind]
+
+    return torch.Tensor(C0)[None, None, None, :].permute(3,0,1,2).to(device), torch.Tensor(C1)[None, None, None, :].permute(3,0,1,2).to(device)
+
+    
