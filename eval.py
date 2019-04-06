@@ -110,7 +110,7 @@ def convert_video(source, dest, factor, batch_size = 10, output_format = 'mp4v',
     w0, h0 = int(vin.get(cv2.CAP_PROP_FRAME_WIDTH)), int(vin.get(cv2.CAP_PROP_FRAME_HEIGHT))
 
     codec = cv2.VideoWriter_fourcc(*output_format)
-    vout = cv2.VideoWriter)dest, codec, float(output_fps), (w0, h0)
+    vout = cv2.VideoWriter(dest, codec, float(output_fps), (w0, h0))
     w,h = (w0//32) * 32, (h0//32) * 32
     setup_back_warp(w, h)
 
@@ -152,7 +152,7 @@ def main(input, checkpoint, output, batch, scale, fps):
     n0 = 0
     fpx = 0
     for dl, fd, fc in convert_video(input, output, int(scale), int(batch), output_fps=int(fps)):
-        fpx, n0 = avg(fpx, n0, d1/(time()-t0()))
+        fpx, n0 = avg(fpx, n0, dl/(time()-t0()))
         prg = int(100*fd/fc)
         eta = (fc-fd)/fpx
         print('\rDone: {:03d}% FPS: {:05.2f} ETA: {:0.2f}s'.format(prg, fpx, eta) + ' '*5, end='')
