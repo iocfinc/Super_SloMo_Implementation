@@ -278,3 +278,134 @@ def validate():
             MSE_val = MSE_LossFn(Ft_p, IFrame)
             psnr += (10 * log10(1/MSE_val.item()))
     return (psnr / len(validationloader)), (tloss/ len(validationloader)), retImg
+
+
+
+### Main training loop
+for epoch in range(dict1['epoch'] + 1, args.epochs):
+    with
+    print("Epoch: ", epoch)
+        
+    # Append and reset
+    cLoss.append([])
+    valLoss.append([])
+    valPSNR.append([])
+    iLoss = 0
+    
+    # Increment scheduler count    
+    scheduler.step()
+    
+    for trainIndex, (trainData, trainFrameIndex) in enumerate(trainloader, 0):
+        
+		## Getting the input and the target from the training set
+        frame0, frameT, frame1 = trainData
+        
+        I0 = frame0.to(device)
+        I1 = frame1.to(device)
+        IFrame = frameT.to(device)
+        
+        optimizer.zero_grad()
+        
+        # Calculate flow between reference frames I0 and I1
+        flowOut = flowComp(torch.cat((I0, I1), dim=1))
+        
+        # Extracting flows between I0 and I1 - F_0_1 and F_1_0
+        F_0_1 = flowOut[:,:2,:,:]
+        F_1_0 = flowOut[:,2:,:,:]
+        
+        fCoeff = model.getFlowCoeff(trainFrameIndex, device)
+        
+        # Calculate intermediate flows
+        F_t_0 = fCoeff[0] * F_0_1 + fCoeff[1] * F_1_0
+        F_t_1 = fCoeff[2] * F_0_1 + fCoeff[3] * F_1_0
+        
+        # Get intermediate frames from the intermediate flows
+        g_I0_F_t_0 = trainFlowBackWarp(I0, F_t_0)
+        g_I1_F_t_1 = trainFlowBackWarp(I1, F_t_1)
+        
+        # Calculate optical flow residuals and visibility maps
+        intrpOut = ArbTimeFlowIntrp(torch.cat((I0, I1, F_0_1, F_1_0, F_t_1, F_t_0, g_I1_F_t_1, g_I0_F_t_0), dim=1))
+        
+        # Extract optical flow residuals and visibility maps
+        F_t_0_f = intrpOut[:, :2, :, :] + F_t_0
+        F_t_1_f = intrpOut[:, 2:4, :, :] + F_t_1
+        V_t_0   = torch.sigmoid(intrpOut[:, 4:5, :, :])
+        V_t_1   = 1 - V_t_0
+        
+        # Get intermediate frames from the intermediate flows
+        g_I0_F_t_0_f = trainFlowBackWarp(I0, F_t_0_f)
+        g_I1_F_t_1_f = trainFlowBackWarp(I1, F_t_1_f)
+        
+        wCoeff = model.getWarpCoeff(trainFrameIndex, device)
+        
+        # Calculate final intermediate frame 
+        Ft_p = (wCoeff[0] * V_t_0 * g_I0_F_t_0_f + wCoeff[1] * V_t_1 * g_I1_F_t_1_f) / (wCoeff[0] * V_t_0 + wCoeff[1] * V_t_1)
+        
+        # Loss
+        recnLoss = L1_lossFn(Ft_p, IFrame)
+            
+        prcpLoss = MSE_LossFn(vgg16_conv_4_3(Ft_p), vgg16_conv_4_3(IFrame))
+        
+        warpLoss = L1_lossFn(g_I0_F_t_0, IFrame) + L1_lossFn(g_I1_F_t_1, IFrame) + L1_lossFn(trainFlowBackWarp(I0, F_1_0), I1) + L1_lossFn(trainFlowBackWarp(I1, F_0_1), I0)
+        
+        loss_smooth_1_0 = torch.mean(torch.abs(F_1_0[:, :, :, :-1] - F_1_0[:, :, :, 1:])) + torch.mean(torch.abs(F_1_0[:, :, :-1, :] - F_1_0[:, :, 1:, :]))
+        loss_smooth_0_1 = torch.mean(torch.abs(F_0_1[:, :, :, :-1] - F_0_1[:, :, :, 1:])) + torch.mean(torch.abs(F_0_1[:, :, :-1, :] - F_0_1[:, :, 1:, :]))
+        loss_smooth = loss_smooth_1_0 + loss_smooth_0_1
+          
+        # Total Loss - Coefficients 204 and 102 are used instead of 0.8 and 0.4
+        # since the loss in paper is calculated for input pixels in range 0-255
+        # and the input to our network is in range 0-1
+        loss = 204 * recnLoss + 102 * warpLoss + 0.005 * prcpLoss + loss_smooth
+        
+        # Backpropagate
+        loss.backward()
+        optimizer.step()
+        iLoss += loss.item()
+               
+        print("Running Time = {}".format(time.time()-init_start))
+        # Validation and progress every `args.progress_iter` iterations
+        if ((trainIndex % args.progress_iter) == args.progress_iter - 1):
+            end = time.time()
+            
+            psnr, vLoss, valImg = validate()
+            
+            valPSNR[epoch].append(psnr)
+            valLoss[epoch].append(vLoss)
+            
+            #Tensorboard
+            itr = trainIndex + epoch * (len(trainloader))
+            
+            writer.add_scalars('Loss', {'trainLoss': iLoss/args.progress_iter,
+                                        'validationLoss': vLoss}, itr)
+            writer.add_scalar('PSNR', psnr, itr)
+            
+            writer.add_image('Validation',valImg , itr)
+            #####
+            
+            endVal = time.time()
+            
+            print(" Loss: %0.6f  Iterations: %4d/%4d  TrainExecTime: %0.1f  ValLoss:%0.6f  ValPSNR: %0.4f  ValEvalTime: %0.2f LearningRate: %f" % (iLoss / args.progress_iter, trainIndex, len(trainloader), end - start, vLoss, psnr, endVal - end, get_lr(optimizer)))
+            
+            
+            cLoss[epoch].append(iLoss/args.progress_iter)
+            iLoss = 0
+            start = time.time()
+    
+    # Create checkpoint after every `args.checkpoint_epoch` epochs
+    if ((epoch % args.checkpoint_epoch) == args.checkpoint_epoch - 1):
+        dict1 = {
+                'Detail':"End to end Super SloMo.",
+                'epoch':epoch,
+                'timestamp':datetime.datetime.now(),
+                'trainBatchSz':args.train_batch_size,
+                'validationBatchSz':args.validation_batch_size,
+                'learningRate':get_lr(optimizer),
+                'loss':cLoss,
+                'valLoss':valLoss,
+                'valPSNR':valPSNR,
+                'state_dictFC': flowComp.state_dict(),
+                'state_dictAT': ArbTimeFlowIntrp.state_dict(),
+                }
+        torch.save(dict1, args.checkpoint_dir + "/SuperSloMo" + str(checkpoint_counter) + ".ckpt")
+        checkpoint_counter += 1
+        
