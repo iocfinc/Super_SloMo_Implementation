@@ -1,351 +1,343 @@
-# Implementation of the model network from the paper.
-# This is just retyping all the modules to learn more about what it does.
-# Based on the paper this is an implementation of a UNET CNN.
 
+#[Super SloMo]
+##High Quality Estimation of Multiple Intermediate Frames for Video Interpolation
 
-# TODO: Import all the dependencies
+import argparse
 import torch
 import torchvision
 import torchvision.transforms as transforms
 import torch.optim as optim
 import torch.nn as nn
 import torch.nn.functional as F
-import numpy as np
-
-# TODO: define the downsampling portion as a class for reusability
-
-class down(nn.Module):
-    """
-    This is going to be used for the creating of the neural network block.
-    Based on the paper this is going to be an implementation of UNET so the layers would be:
-
-    Average Pooling > Convolution + Leaky ReLU > Convolution + Leaky ReLU
-
-    This is the most basic block for the UNET that is going to be downsampling (flat to wide). Exepecting this to be reused again on the newtok calss.
-
-    ----------------------------------------
-    METHODS:
-
-    forward(x)
-        This would return the output tensor after passing input `x` to the block
-    """
-    def __init__(self, inChannels, outChannels, filterSize):
-        """
-        Defines the structure of the convolutional layers per block. There are two conv layers for a basic block, one following the other.
-
-        Parameters
-        ----------------------------------------
-        inChannels: int
-            The number of input channels in the first convolutional layer
-
-        outChannels: int
-            The number of output channels for the first convolutional layer.
-            For the second convolutional layer this is going to be the input dimmension as well since it is piped.
-
-        filterSize: int
-        The filter size for the convolutional block. This would create a (filterSize x filterSize) sized filter for both conv1 and conv2.
-
-        """
-        super(down, self).__init__()
-        
-        self.conv1 = nn.Conv2d(inChannels, outChannels, filterSize, stride = 1, padding = int(filterSize - 1)/2) # First block, Connected to input
-        self.conv2 = nn.Conv2d(outChannels, outChannels, filterSize, stride = 1, padding = int(filterSize - 1)/2) # Second block, Connected to conv1
-
-    def forward(self, x):
-        """
-        This would return the output tensor after passing input `x` to the block
-
-        Parameters
-        ----------------------------------------
-        x: tensor
-            The input to the NN block. In this case the image/frame.
-        
-        Returns
-        ----------------------------------------
-        tensor
-            Output tensor after passing the input `x` through the NN block.
-
-        """
-        # Avg Pool the layers
-        x = F.avg_pool2d(x,2)
-        # Leaky ReLU and Convolution pair 1
-        x = F.leaky_relu(self.conv1(x),negative_slope=0.1)
-        # Leaky ReLU and Convolution pair 2
-        x = F.leaky_relu(self.conv2(x),negative_slope=0.1)
-
-        return x
-
-class up(nn.Module):
-    """
-    This is going to be used for the creating of the neural network block.
-    Based on the paper this is going to be an implementation of UNET so the layers would be:
-
-    Bilinear Interpolation > Conv + Leak ReLU > Conv + Leaky ReLU
-
-    This is the most basic block for the UNET that is going to be upsampling (deep to flat). Expecting this to be reused again on the network class.
-
-    ----------------------------------------
-    METHODS:
-
-    forward(x)
-        This would return the output tensor after passing input `x` to the block
-    """
-    def __init__(self, inChannels, outChannels):
-        """
-        Defines the structure of the convolutional layers per block. There are two conv layers for a basic block, one following the other.
-
-        Parameters
-        ----------------------------------------
-        inChannels: int
-            The number of input channels in the first convolutional layer
-
-        outChannels: int
-            The number of output channels for the first convolutional layer.
-            For the 2nd conv layer this number is doubled to increase the size of the image
-
-        """
-        super(up, self).__init__()
-        
-        self.conv1 = nn.Conv2d(inChannels, outChannels, 3, stride = 1, padding = 1) # First block, Connected to input
-        self.conv2 = nn.Conv2d(2*outChannels, outChannels, 3, stride = 1, padding = 1) # Second block, Connected to conv1
-
-    def forward(self, x, skpCn):
-        """
-        This would return the output tensor after passing input `x` to the block
-
-        Parameters
-        ----------------------------------------
-        x: tensor
-            The input to the NN block. In this case the image/frame.
-        skpCn : tensor
-            This is the skip connection between the input and this NN block
-        
-        Returns
-        ----------------------------------------
-        tensor
-            Output tensor after passing the input `x` through the NN block.
-
-        """
-        # Avg Pool the layers
-        x = F.interpolate(x, scale_factor=2,mode='billinear')
-        # Leaky ReLU and Convolution pair 1
-        x = F.leaky_relu(self.conv1(x),negative_slope=0.1)
-        # Leaky ReLU and Convolution pair 2 (introduction of skip connection)
-        x = F.leaky_relu(self.conv2(torch.cat((x, skpCn),1)),negative_slope=0.1)
-
-        return x
-
-class UNET(nn.Module):
-    """
-    This would be the implementation of the UNET architecture described in the original Super SloMo paper.
-    ----------------------------------------
-    METHODS:
-    forward(x)
-        Returns the output tensor after passing input `x` through the entire UNET architecture
-    """
-    def __init__(self, inChannels, outChannels):
-        """
-        I am defining the layers that would be used to create the UNET. The parameters are based on the paper including the filter sizes.
-
-        Parameters
-        ----------------------------------------
-        inChannels: int
-            The number of input channels in the UNET (based on input image?)
-
-        outChannels: int
-            The number of output channels for the UNET
-
-        """
-        super(UNET,self).__init__()
-        # Definition of the entire UNET Architecture based on the original paper
-        self.conv1 = nn.Conv2d(inChannels, 32, 7, stride = 1, padding = 3)
-        self.conv2 = nn.Conv2d(32, 32, 7, stride = 1, padding = 3)
-        self.down1 = down(32, 64, 5) # First filter size is 5x5 to have a longer range in catching motion
-        self.down2 = down(64, 128, 3)
-        self.down3 = down(128, 256, 3)
-        self.down4 = down(256, 512, 3)
-        self.down5 = down(512, 512, 3)
-        # End of contraction so we start going up and expand
-        self.up1 = up(512, 512)
-        self.up2 = up(512, 256)
-        self.up3 = up(256, 128)
-        self.up4 = up(128, 64)
-        self.up5 = up(64, 32)
-        self.conv3 = nn.Conv2d(32, outChannels, stride = 1, padding = 1)
-
-    def forward(self, x):
-        """
-        Returns the output tensor after passing input `x` to the UNET.
-        We are now going to link up all the layers we have initialized so they form up the UNET architecture.
-        Parameters
-        ----------------------------------------
-        x: tensor
-            The input to the entire UNET. So this would be the frames
-        Returns
-        ----------------------------------------
-        tensor
-            The output of the UNET. This should be the interpolated frame.
-        """
-        # Compression phase, downsampling
-        x = F.leaky_relu(self.conv1(x), negative_slope=0.1)
-        S1 = F.leaky_relu(self.conv2(x), negative_slope=0.1)
-        S2 = self.down1(S1)
-        S3 = self.down2(S2)
-        S4 = self.down3(S3)
-        S5 = self.down4(S4)
-        u = self.down5(S5)
-        # Expansion phase, upsampling.
-        # NOTE: We also have to add back the skip connections every up sample block.
-        u = self.up1(u, S5)
-        u = self.up2(u, S4)
-        u = self.up3(u, S3)
-        u = self.up4(u, S2)
-        u = self.up5(u, S1)
-        x - F.leaky_relu(self.conv3(u), negative_slope=0.1)
-        return x
+import model
+import dataloader
+from math import log10
+import datetime
+from tensorboardX import SummaryWriter
+from tqdm import tqdm, tnrange, tqdm_notebook
 
 
-# At this stage we have completed defining our UNET architecture. The succeeding functions are the additional steps
-# defined in the Super SlowMo paper that helped them achieve their results. This would include getting the warp coefficients.
-# TODO: Complete the backwarp class, getFlowCoeff function and getWarpCoeff function
-class backwarp(nn.Module):
-    """
-    Returns the output tensor after passing input `x` to the UNET.
-    We are now going to link up all the layers we have initialized so they form up the UNET architecture.
-    Parameters
-    ----------------------------------------
-    x: tensor
-        The input to the entire UNET. So this would be the frames
-    Returns
-    ----------------------------------------
-    tensor
-        The output of the UNET. This should be the interpolated frame.
-    """
+# For parsing commandline arguments
+parser = argparse.ArgumentParser()
+parser.add_argument("--dataset_root", type=str, required=True, help='path to dataset folder containing train-test-validation folders')
+parser.add_argument("--checkpoint_dir", type=str, required=True, help='path to folder for saving checkpoints')
+parser.add_argument("--checkpoint", type=str, help='path of checkpoint for pretrained model')
+parser.add_argument("--train_continue", type=bool, default=False, help='If resuming from checkpoint, set to True and set `checkpoint` path. Default: False.')
+parser.add_argument("--epochs", type=int, default=200, help='number of epochs to train. Default: 200.')
+parser.add_argument("--train_batch_size", type=int, default=6, help='batch size for training. Default: 6.')
+parser.add_argument("--validation_batch_size", type=int, default=10, help='batch size for validation. Default: 10.')
+parser.add_argument("--init_learning_rate", type=float, default=0.0001, help='set initial learning rate. Default: 0.0001.')
+parser.add_argument("--progress_iter", type=int, default=10, help='frequency of reporting progress and validation. N: after every N iterations. Default: 10.')
+parser.add_argument("--checkpoint_epoch", type=int, default=10, help='checkpoint saving frequency. N: after every N epochs. Each checkpoint is roughly of size 151 MB.Default: 10')
+args = parser.parse_args()
 
-    def __init__(self, W, H, device):
-        """
-        Parameters
-        ----------------------------------------
-        W: int
-            input image width
-        H: int
-            input image height
-        device: device
-            computation device, either (cpu/cuda)
-        """
-        super(backwarp, self).__init__()
-        gridx, gridy = np.meshgrid(np.arange(W), np.arange(H))
-        self.W = W
-        self.H = H
-        self.gridx = torch.Tensor(gridx, requires_grad = False, device = device)
-        self.gridy = torch.Tensor(gridy, requires_grad = False, device = device)
+##[TensorboardX](https://github.com/lanpa/tensorboardX)
+### For visualizing loss and interpolated frames
+
+
+writer = SummaryWriter('log')
+
+
+###Initialize flow computation and arbitrary-time flow interpolation CNNs.
+
+
+device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+flowComp = model.UNet(6, 4)
+flowComp.to(device)
+ArbTimeFlowIntrp = model.UNet(20, 5)
+ArbTimeFlowIntrp.to(device)
+
+
+###Initialze backward warpers for train and validation datasets
+
+
+trainFlowBackWarp      = model.backWarp(352, 352, device)
+trainFlowBackWarp      = trainFlowBackWarp.to(device)
+validationFlowBackWarp = model.backWarp(640, 352, device)
+validationFlowBackWarp = validationFlowBackWarp.to(device)
+
+
+###Load Datasets
+
+
+# Channel wise mean calculated on adobe240-fps training dataset
+mean = [0.429, 0.431, 0.397]
+std  = [1, 1, 1]
+normalize = transforms.Normalize(mean=mean,
+                                 std=std)
+transform = transforms.Compose([transforms.ToTensor(), normalize])
+
+trainset = dataloader.SuperSloMo(root=args.dataset_root + '/train', transform=transform, train=True)
+trainloader = torch.utils.data.DataLoader(trainset, batch_size=args.train_batch_size, shuffle=True, drop_last=True)
+
+validationset = dataloader.SuperSloMo(root=args.dataset_root + '/validation', transform=transform, randomCropSize=(640, 352), train=False)
+validationloader = torch.utils.data.DataLoader(validationset, batch_size=args.validation_batch_size, shuffle=False, drop_last=False)
+
+print(len(validationloader), len(trainloader))
+
+
+###Create transform to display image from tensor
+
+
+negmean = [x * -1 for x in mean]
+revNormalize = transforms.Normalize(mean=negmean, std=std)
+TP = transforms.Compose([revNormalize, transforms.ToPILImage()])
+
+
+###Utils
     
-    def forward(self, img, flow):
-        """
-        Passes `img` input and `flow` input to the network for backwarping block
-        Basically, moving back the frames with accounting of the optical flow that happened between I0 and I1
-        From the paper:
-        I0 = backwarp(I1, F_0_1)
+def get_lr(optimizer):
+    for param_group in optimizer.param_groups:
+        return param_group['lr']
 
-        Parameters
-        ----------------------------------------
-        img: tensor
-            input image (I1)
-        flow: tensor
-            optical flow from I0 and I1: F_0_1
-        device: device
-            computation device, either (cpu/cuda)
-        Returns
-        ----------------------------------------
-        tensor
-            frame (I0)
-        """
-        # The following cell would be used to get the horizontal and vertical flows
 
-        u = flow[:, 0, :, :]
-        v = flow[:, 1, :, :]
-        x = self.gridx.unsqueeze(0).expand_as(u).float()+u
-        y = self.gridy.unsqueeze(0).expand_as(v).float()+v
+###Loss and Optimizer
 
-        # Flow range from -1 to 1 this is for compliance with `grid_sample` method of PyTorch
-        x = 2*(x/self.W - 0.5)
-        y = 2*(x/self.H - 0.5)
 
-        # X and Y stacked
-        grid = torch.stack((x,y), dim = 3)
+L1_lossFn = nn.L1Loss()
+MSE_LossFn = nn.MSELoss()
 
-        # Producing the sample pixels using bilinear interpolation, this is handled by grid_sample method
-        imgOut = torch.nn.functional.grid_sample(img, grid)
-        return imgOut
+params = list(ArbTimeFlowIntrp.parameters()) + list(flowComp.parameters())
+
+optimizer = optim.Adam(params, lr=args.init_learning_rate)
+# scheduler to decrease learning rate by a factor of 10 at milestones.
+# scheduler = optim.lr_scheduler.MultiStepLR(optimizer, milestones=args.milestones, gamma=0.1)
+scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer,10*len(trainloader))
+print('Scheduler and optimizer initialized')
+
+###Initializing VGG16 model for perceptual loss
+
+vgg16 = torchvision.models.vgg16()
+vgg16_conv_4_3 = nn.Sequential(*list(vgg16.children())[0][:22])
+vgg16_conv_4_3.to(device)
+for param in vgg16_conv_4_3.parameters():
+		param.requires_grad = False
+
+print('VGG16 model initialized')
+
+### Validation function
+# 
+
+
+def validate():
+    # For details see training.
+    psnr = 0
+    tloss = 0
+    flag = 1
+    with torch.no_grad():
+        for validationIndex, (validationData, validationFrameIndex) in enumerate(validationloader, 0):
+            frame0, frameT, frame1 = validationData
+
+            I0 = frame0.to(device)
+            I1 = frame1.to(device)
+            IFrame = frameT.to(device)
+                        
+            
+            flowOut = flowComp(torch.cat((I0, I1), dim=1))
+            F_0_1 = flowOut[:,:2,:,:]
+            F_1_0 = flowOut[:,2:,:,:]
+
+            fCoeff = model.getFlowCoeff(validationFrameIndex, device)
+
+            F_t_0 = fCoeff[0] * F_0_1 + fCoeff[1] * F_1_0
+            F_t_1 = fCoeff[2] * F_0_1 + fCoeff[3] * F_1_0
+
+            g_I0_F_t_0 = validationFlowBackWarp(I0, F_t_0)
+            g_I1_F_t_1 = validationFlowBackWarp(I1, F_t_1)
+            
+            intrpOut = ArbTimeFlowIntrp(torch.cat((I0, I1, F_0_1, F_1_0, F_t_1, F_t_0, g_I1_F_t_1, g_I0_F_t_0), dim=1))
+                
+            F_t_0_f = intrpOut[:, :2, :, :] + F_t_0
+            F_t_1_f = intrpOut[:, 2:4, :, :] + F_t_1
+            V_t_0   = torch.sigmoid(intrpOut[:, 4:5, :, :])
+            V_t_1   = 1 - V_t_0
+                
+            g_I0_F_t_0_f = validationFlowBackWarp(I0, F_t_0_f)
+            g_I1_F_t_1_f = validationFlowBackWarp(I1, F_t_1_f)
+            
+            wCoeff = model.getWarpCoeff(validationFrameIndex, device)
+            
+            Ft_p = (wCoeff[0] * V_t_0 * g_I0_F_t_0_f + wCoeff[1] * V_t_1 * g_I1_F_t_1_f) / (wCoeff[0] * V_t_0 + wCoeff[1] * V_t_1)
+            
+            # For tensorboard
+            if (flag):
+                retImg = torchvision.utils.make_grid([revNormalize(frame0[0]), revNormalize(frameT[0]), revNormalize(Ft_p.cpu()[0]), revNormalize(frame1[0])], padding=10)
+                flag = 0
+            
+            
+            #loss
+            recnLoss = L1_lossFn(Ft_p, IFrame)
+            
+            prcpLoss = MSE_LossFn(vgg16_conv_4_3(Ft_p), vgg16_conv_4_3(IFrame))
+            
+            warpLoss = L1_lossFn(g_I0_F_t_0, IFrame) + L1_lossFn(g_I1_F_t_1, IFrame) + L1_lossFn(validationFlowBackWarp(I0, F_1_0), I1) + L1_lossFn(validationFlowBackWarp(I1, F_0_1), I0)
+        
+            loss_smooth_1_0 = torch.mean(torch.abs(F_1_0[:, :, :, :-1] - F_1_0[:, :, :, 1:])) + torch.mean(torch.abs(F_1_0[:, :, :-1, :] - F_1_0[:, :, 1:, :]))
+            loss_smooth_0_1 = torch.mean(torch.abs(F_0_1[:, :, :, :-1] - F_0_1[:, :, :, 1:])) + torch.mean(torch.abs(F_0_1[:, :, :-1, :] - F_0_1[:, :, 1:, :]))
+            loss_smooth = loss_smooth_1_0 + loss_smooth_0_1
+            
+            
+            loss = 204 * recnLoss + 102 * warpLoss + 0.005 * prcpLoss + loss_smooth
+            tloss += loss.item()
+            
+            #psnr
+            MSE_val = MSE_LossFn(Ft_p, IFrame)
+            psnr += (10 * log10(1 / MSE_val.item()))
+            
+    return (psnr / len(validationloader)), (tloss / len(validationloader)), retImg
+
+
+### Initialization
+
+
+if args.train_continue:
+    dict1 = torch.load(args.checkpoint)
+    ArbTimeFlowIntrp.load_state_dict(dict1['state_dictAT'])
+    flowComp.load_state_dict(dict1['state_dictFC'])
+    print('Train Continue')
     
-# NOTE: This is the t values for the intermediate frames. There would be 7 frames between t=0 --> t=1
-# We are using linspace to genrate the values instead of manually defining them. 1/8 = 0.125
-t = np.linspace(0.125, 0.875, 7)
+else:
+    dict1 = {'loss': [], 'valLoss': [], 'valPSNR': [], 'epoch': 0}
 
-def getFlowCoeff (indices, device):
-    """
-    We are getting the flow coefficients used for calculating the intermidiate(in between) optical flow
-    from the flows between I0 and I1: F_0_1 and F_1_0.
+init_epoch = dict1['epoch']+1
+### Training
 
-    This is for the interpolation of arbitrary-time flow (eq. 2 and 3 of the paper)
+
+import time
+
+init_start = time.time()
+cLoss   = dict1['loss']
+valLoss = dict1['valLoss']
+valPSNR = dict1['valPSNR']
+checkpoint_counter = 0
+print('start of training loop')
+### Main training loop
+for epoch in tqdm(range(0, args.epochs), leave = False, desc = 'Epoch progress bar: '):
+    print("Epoch: ", epoch)
+    start = time.time()
+    # Append and reset
+    cLoss.append([])
+    valLoss.append([])
+    valPSNR.append([])
+    iLoss = 0
+    if (epoch%10 == 0):
+        print('Restarting the LR')
+        scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer,10*len(trainloader))
+        # print(('Epoch: {}, LR = {}, confirm_LR = {}').format(epoch ,scheduler.get_lr()[0], optimizer.param_groups[0]['lr']))
+    for trainIndex, (trainData, trainFrameIndex) in enumerate(trainloader, 0):
+        scheduler.step()
+        
+		## Getting the input and the target from the training set
+        frame0, frameT, frame1 = trainData
+        
+        I0 = frame0.to(device)
+        I1 = frame1.to(device)
+        IFrame = frameT.to(device)
+        
+        optimizer.zero_grad()
+        
+        # Calculate flow between reference frames I0 and I1
+        flowOut = flowComp(torch.cat((I0, I1), dim=1))
+        
+        # Extracting flows between I0 and I1 - F_0_1 and F_1_0
+        F_0_1 = flowOut[:,:2,:,:]
+        F_1_0 = flowOut[:,2:,:,:]
+        
+        fCoeff = model.getFlowCoeff(trainFrameIndex, device)
+        
+        # Calculate intermediate flows
+        F_t_0 = fCoeff[0] * F_0_1 + fCoeff[1] * F_1_0
+        F_t_1 = fCoeff[2] * F_0_1 + fCoeff[3] * F_1_0
+        
+        # Get intermediate frames from the intermediate flows
+        g_I0_F_t_0 = trainFlowBackWarp(I0, F_t_0)
+        g_I1_F_t_1 = trainFlowBackWarp(I1, F_t_1)
+        
+        # Calculate optical flow residuals and visibility maps
+        intrpOut = ArbTimeFlowIntrp(torch.cat((I0, I1, F_0_1, F_1_0, F_t_1, F_t_0, g_I1_F_t_1, g_I0_F_t_0), dim=1))
+        
+        # Extract optical flow residuals and visibility maps
+        F_t_0_f = intrpOut[:, :2, :, :] + F_t_0
+        F_t_1_f = intrpOut[:, 2:4, :, :] + F_t_1
+        V_t_0   = torch.sigmoid(intrpOut[:, 4:5, :, :])
+        V_t_1   = 1 - V_t_0
+        
+        # Get intermediate frames from the intermediate flows
+        g_I0_F_t_0_f = trainFlowBackWarp(I0, F_t_0_f)
+        g_I1_F_t_1_f = trainFlowBackWarp(I1, F_t_1_f)
+        
+        wCoeff = model.getWarpCoeff(trainFrameIndex, device)
+        
+        # Calculate final intermediate frame 
+        Ft_p = (wCoeff[0] * V_t_0 * g_I0_F_t_0_f + wCoeff[1] * V_t_1 * g_I1_F_t_1_f) / (wCoeff[0] * V_t_0 + wCoeff[1] * V_t_1)
+        
+        # Loss
+        recnLoss = L1_lossFn(Ft_p, IFrame)
+            
+        prcpLoss = MSE_LossFn(vgg16_conv_4_3(Ft_p), vgg16_conv_4_3(IFrame))
+        
+        warpLoss = L1_lossFn(g_I0_F_t_0, IFrame) + L1_lossFn(g_I1_F_t_1, IFrame) + L1_lossFn(trainFlowBackWarp(I0, F_1_0), I1) + L1_lossFn(trainFlowBackWarp(I1, F_0_1), I0)
+        
+        loss_smooth_1_0 = torch.mean(torch.abs(F_1_0[:, :, :, :-1] - F_1_0[:, :, :, 1:])) + torch.mean(torch.abs(F_1_0[:, :, :-1, :] - F_1_0[:, :, 1:, :]))
+        loss_smooth_0_1 = torch.mean(torch.abs(F_0_1[:, :, :, :-1] - F_0_1[:, :, :, 1:])) + torch.mean(torch.abs(F_0_1[:, :, :-1, :] - F_0_1[:, :, 1:, :]))
+        loss_smooth = loss_smooth_1_0 + loss_smooth_0_1
+          
+        # Total Loss - Coefficients 204 and 102 are used instead of 0.8 and 0.4
+        # since the loss in paper is calculated for input pixels in range 0-255
+        # and the input to our network is in range 0-1
+        loss = 204 * recnLoss + 102 * warpLoss + 0.005 * prcpLoss + loss_smooth
+        
+        # Backpropagate
+        loss.backward()
+        optimizer.step()
+        iLoss += loss.item()
+               
+        
+        # Validation and progress every `args.progress_iter` iterations
+        if ((trainIndex % args.progress_iter) == args.progress_iter - 1):
+            end = time.time()
+            
+            psnr, vLoss, valImg = validate()
+            
+            valPSNR[epoch].append(psnr)
+            valLoss[epoch].append(vLoss)
+            
+            #Tensorboard
+            itr = trainIndex + epoch * (len(trainloader))
+            
+            writer.add_scalars('Loss', {'trainLoss': iLoss/args.progress_iter,
+                                        'validationLoss': vLoss}, itr)
+            writer.add_scalar('PSNR', psnr, itr)
+            
+            writer.add_image('Validation',valImg , itr)
+            #####
+            
+            endVal = time.time()
+            
+            print(" Loss: %0.6f  Iterations: %4d/%4d  TrainExecTime: %0.1f  ValLoss:%0.6f  ValPSNR: %0.4f  ValEvalTime: %0.2f LearningRate: %0.10f" % (iLoss / args.progress_iter, trainIndex, len(trainloader), end - start, vLoss, psnr, endVal - end, get_lr(optimizer)))
+            
+            
+            cLoss[epoch].append(iLoss/args.progress_iter)
+            iLoss = 0
+            start = time.time()
     
-    F_t_0 = C00 x F_0_1 + C01 x F_1_0
-    F_t_1 = C10 x F_0_1 + C11 x F_1_0
-
-    where:
-    C00 = -(1-t) x t
-    C01 = txt
-    C10 = (1-t) x (1-t)
-    C11 = -t x (1-t)
-
-    Parameters
-    ----------------------------------------
-    indices: tensor
-        The corresponding intermediate frame position of all samples in the batch
-    device: device
-        Where our operation would be running
-
-    Returns
-    ----------------------------------------
-    tensor
-        Coefficients of C00, C01, C10, C11
-    """
-    # detaching the indices tensor and making it a numpy array
-    ind = indices.detach().numpy()
-    C11 = C00 = -(1 - (t[ind]))*(t[ind])
-    C01 = (t[ind])*(t[ind])
-    C10 = (1 - (t[ind]))*(1-(t[ind]))
-    return torch.Tensor(C00)[None, None, None, :].permute(3,0,1,2).to(device),torch.Tensor(C01)[None, None, None, :].permute(3,0,1,2).to(device),torch.Tensor(C10)[None, None, None, :].permute(3,0,1,2).to(device),torch.Tensor(C11)[None, None, None, :].permute(3,0,1,2).to(device),
-
-def getWarpCoeff(indices, device):
-    """
-    This is where we get the coefficients for our warping function. This will allow us to compute
-    for the intermediate frames between F_t_0 and F_t_1. On the paper these are the coefficients in
-    equation 1.
-
-    It_gen = (C0 x V_t_0 x g_I_0_F_t_0 + C1 x V_t_1 x g_I_1_F_t_1)/ (C0 x V_t_0 + C1 x V_t_1)
-
-    where:
-    C0 = 1-t
-    C1 = t
-
-    Parameters
-    ----------------------------------------
-    indices: tensor
-        Indices that corresponds to the intermediate frame positions of all samples in the batch (arbitrary time)
-    device: device
-        Where our operation would be running
-
-    Returns
-    ----------------------------------------
-    tensor:
-        Coefficients for C0 and C1
-    """
-    # detaching the indices tensor and making it a numpy array
-    ind = indices.detach().numpy()
-    C0 = 1 - t[ind]
-    C1 = t[ind]
-
-    return torch.Tensor(C0)[None, None, None, :].permute(3,0,1,2).to(device), torch.Tensor(C1)[None, None, None, :].permute(3,0,1,2).to(device)
-
-    
+    # Create checkpoint after every `args.checkpoint_epoch` epochs
+    if ((epoch % args.checkpoint_epoch) == args.checkpoint_epoch - 1):
+        dict1 = {
+                'Detail':"End to end Super SloMo.",
+                'epoch':int(init_epoch+epoch),
+                'timestamp':datetime.datetime.now(),
+                'trainBatchSz':args.train_batch_size,
+                'validationBatchSz':args.validation_batch_size,
+                'learningRate':get_lr(optimizer),
+                'loss':cLoss,
+                'valLoss':valLoss,
+                'valPSNR':valPSNR,
+                'state_dictFC': flowComp.state_dict(),
+                'state_dictAT': ArbTimeFlowIntrp.state_dict(),
+                }
+        
+        torch.save(dict1, args.checkpoint_dir + "/SuperSloMo" + str(checkpoint_counter) + ".ckpt")
+        checkpoint_counter += 1
+        print('Checkpoint File Created')
+    print("Running Time = {}".format(time.time()-init_start))
