@@ -35,13 +35,27 @@ if (epoch%10 == 0):
 
 The sample video for this is a 720p version of Big Buck Bunny which is 1Mb in size which is [downloadable here](https://sample-videos.com/video123/mp4/720/big_buck_bunny_720p_1mb.mp4). The original running time is `time=00:00:05.28` and the total detected frames by ffmpeg is `132`.
 
-I used the trained [checkpoint]() for the model in 50 epochs under the smaller dataset. The scale factor was set to 4 and the output fps was set to 60fps. After processing I got a file size of 8Mb, a total time of `time=00:00:08.36` and `505` frames created.
+I used the trained [checkpoint](https://drive.google.com/open?id=1ydwy8XNGkZALpY2dpeN3q2YQKorLs7LS) for the model in 50 epochs under the smaller dataset. The scale factor was set to 4 and the output fps was set to 60fps. After processing I got a file size of 8Mb, a total time of `time=00:00:08.36` and `505` frames created.
 
 Some noticeable issues can be seen in the resulting video but given that this was only trained for 50 epochs and in a reduced dataset I think the fact that it can produce the intermediate frames is already amazing.
 
 Some key points to be improved are the stutter in the overall frame. If we focus on the grass near the left side of the screen we can see some shaking in the frame that was not in the original. Also, notice the sort of mirage that was left behind when the bunny was raising his right hand to stretch. We can clearly see the sort of wave-like blob in the grass where his arms passed through. It is very much an open project and there is a lot more to do if this was pursued further.
 
-I'll add some GIFs of the resulting videos for this once I have them.
+Here are the resulting GIF of the model after 50 epochs on a small subset.
+
+![BigBuckBunny-Small Subset - 50 Epochs](https://gph.is/g/aK9OkX4)
+![BigBuckBunny-Original Video](https://gph.is/g/4AAYPQ4)
+
+![Roller--Small Subset - 230 Epochs](https://gph.is/g/ZxNr56E)
+![Roller--Small Subset - 660 Epochs](https://gph.is/g/EJqpQj4)
+![Roller Coaster-Original Video](https://gph.is/g/E01JOYa)
+[Original Source](https://www.videoblocks.com/video/roller-coaster-riders-with-arms-up-vxtvaz5)
+
+
+![Boxer--Small Subset - 230 Epochs](https://gph.is/g/aX3nkeE)
+![Boxer--Small Subset - 660 Epochs](https://gph.is/g/Z523LQ4)
+![Boxer-Original Video](https://gph.is/g/ZPpYO8Z)
+[Original Source](https://www.videoblocks.com/video/young-sportsmen-boxing-speed-punching-bag-4hye9mhpx)
 
 ## Possible Future
 
