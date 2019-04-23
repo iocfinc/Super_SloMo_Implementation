@@ -54,6 +54,8 @@ Here are the resulting GIF of the model after 50 epochs on a small subset.
 
 [Original Source](https://www.videoblocks.com/video/roller-coaster-riders-with-arms-up-vxtvaz5)
 
+![Original_Video_CheckPoint_Pretrained](https://media.giphy.com/media/dxgxdqZfsT8nOJtWou/giphy.gif)
+
 
 ![Boxer--Small Subset - 230 Epochs](https://gph.is/g/aX3nkeE)
 ![Boxer--Small Subset - 660 Epochs](https://gph.is/g/Z523LQ4)
