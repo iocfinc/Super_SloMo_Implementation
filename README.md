@@ -46,9 +46,9 @@ Here are the resulting GIF of the model after 50 epochs on a small subset.
 ![BigBuckBunny-Small Subset - 50 Epochs](https://gph.is/g/aK9OkX4)
 ![BigBuckBunny-Original Video](https://gph.is/g/4AAYPQ4)
 
-![Roller--Small Subset - 230 Epochs](https://gph.is/g/ZxNr56E)
-![Roller--Small Subset - 660 Epochs](https://gph.is/g/EJqpQj4)
-![Roller Coaster-Original Video](https://gph.is/g/E01JOYa)
+![Roller--Small Subset - 230 Epochs](https://media.giphy.com/media/WR2eJfwyJKcbhcLcY1/giphy.gif)
+![Roller--Small Subset - 660 Epochs](https://media.giphy.com/media/JQSgUppGtMJxDGueHg/giphy.gif)
+![Roller Coaster-Original Video](https://media.giphy.com/media/gEYEtue0ZF5QyLbYsP/giphy.gif)
 [Original Source](https://www.videoblocks.com/video/roller-coaster-riders-with-arms-up-vxtvaz5)
 
 
