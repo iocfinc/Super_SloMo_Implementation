@@ -46,6 +46,10 @@ Here are the resulting GIF of the model after 50 epochs on a small subset.
 ![Big_Buck_Bunny_1mb_processed](https://media.giphy.com/media/Q5RsZ2HFEy0vhghsEy/giphy-downsized-large.gif)
 ![Big_Buck_Bunny_1mb_Original](https://media.giphy.com/media/Q5RsZ2HFEy0vhghsEy/giphy.gif)
 
+![Testing_Big_Buck_Bunny_LANCZOS](https://media.giphy.com/media/ci08i0ac5BeNVMAIqf/giphy.gif)
+
+![TESTING]('./GIF/SuperSloMo-BBB-330.gif')
+
 ## Possible Future
 
 Future work in this would be figuring out how to apply Random Pixel Shuffle to the upsampling of the intermediate images. Right now the options are either Bilinear or LANCZOS. Also, it would be good to train the model in a larger dataset for longer. The baseline for the original repo model was 200 epochs for the Adobe240fps dataset. I did a trial run using the same dataset and 1 epoch was taking almost 1 hour to train.
