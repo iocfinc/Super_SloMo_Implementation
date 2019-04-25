@@ -43,7 +43,8 @@ Some key points to be improved are the stutter in the overall frame. If we focus
 
 Here are the resulting GIF of the model after 50 epochs on a small subset.
 
-![Big Buck Bunny - 1mb processed](https://media.giphy.com/media/Q5RsZ2HFEy0vhghsEy/giphy-downsized-large.gif)
+![Big_Buck_Bunny_1mb_processed](https://media.giphy.com/media/Q5RsZ2HFEy0vhghsEy/giphy-downsized-large.gif)
+![Big_Buck_Bunny_1mb_Original](https://media.giphy.com/media/Q5RsZ2HFEy0vhghsEy/giphy.gif)
 
 ## Possible Future
 
