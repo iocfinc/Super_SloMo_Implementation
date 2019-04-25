@@ -43,24 +43,7 @@ Some key points to be improved are the stutter in the overall frame. If we focus
 
 Here are the resulting GIF of the model after 50 epochs on a small subset.
 
-![BigBuckBunny-Small Subset - 50 Epochs](https://gph.is/g/aK9OkX4)
-![BigBuckBunny-Original Video](https://gph.is/g/4AAYPQ4)
-
-![Roller--Small Subset - 230 Epochs](https://media.giphy.com/media/WR2eJfwyJKcbhcLcY1/giphy.gif)
-
-![Roller--Small Subset - 660 Epochs](https://media.giphy.com/media/JQSgUppGtMJxDGueHg/giphy.gif)
-
-![Roller Coaster-Original Video](https://media.giphy.com/media/gEYEtue0ZF5QyLbYsP/giphy.gif)
-
-[Original Source](https://www.videoblocks.com/video/roller-coaster-riders-with-arms-up-vxtvaz5)
-
-![Original_Video_CheckPoint_Pretrained](https://media.giphy.com/media/dxgxdqZfsT8nOJtWou/giphy.gif)
-
-
-![Boxer--Small Subset - 230 Epochs](https://gph.is/g/aX3nkeE)
-![Boxer--Small Subset - 660 Epochs](https://gph.is/g/Z523LQ4)
-![Boxer-Original Video](https://gph.is/g/ZPpYO8Z)
-[Original Source](https://www.videoblocks.com/video/young-sportsmen-boxing-speed-punching-bag-4hye9mhpx)
+<iframe src="https://giphy.com/embed/Q5RsZ2HFEy0vhghsEy" width="480" height="382" frameBorder="0" class="giphy-embed" allowFullScreen></iframe><p><a href="https://giphy.com/gifs/superslomo-Q5RsZ2HFEy0vhghsEy">via GIPHY</a></p>
 
 ## Possible Future
 
