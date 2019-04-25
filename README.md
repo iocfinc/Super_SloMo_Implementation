@@ -43,7 +43,7 @@ Some key points to be improved are the stutter in the overall frame. If we focus
 
 Here are the resulting GIF of the model after 50 epochs on a small subset.
 
-![SuperSloMo-330-BigBuckBunny]('https://github.com/iocfinc/Super_SloMo_Implementation/blob/master/GIF/SuperSloMo-BBB-330.gif)
+![SuperSloMo-330-BigBuckBunny](https://raw.githubusercontent.com/iocfinc/Super_SloMo_Implementation/master/GIF/SuperSloMo-BBB-330.gif)
 
 ## Possible Future
 
