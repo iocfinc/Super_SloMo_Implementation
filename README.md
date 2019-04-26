@@ -44,9 +44,12 @@ Some key points to be improved are the stutter in the overall frame. If we focus
 Here are the resulting GIF of the model after 50 epochs on a small subset.
 
 **Slomo Big Buck Bunny Sample Video Results**
+[Origninal Source](https://sample-videos.com/video123/mp4/720/big_buck_bunny_720p_1mb.mp4)
+
 ![SuperSloMo-SF3-FPS30-BigBuckBunny](https://raw.githubusercontent.com/iocfinc/Super_SloMo_Implementation/master/GIF/SuperSloMo-BBB-330.gif)
 
 **Slomo Roller Coaster Sample Video Results**
+
 ![SuperSloMo-Original-Roller](https://raw.githubusercontent.com/iocfinc/Super_SloMo_Implementation/master/GIF/Roller-Original.gif)
 
 
